@@ -1,0 +1,24 @@
+Memory Game
+
+Main steps:
+- Build logic + Console Print (ChatGPT)
+- Build UI
+
+
+Extras:
+- Integrate Pokemon
+- Make the grid size changable
+___
+
+Logic:
+
+- Init:
+  - Create the basic grid in Arrays
+  - Randomize grid order on print (keys might be important here, check it out again)
+  - Put array items into a grid
+  - Print grid
+
+  - Once the user clicks something, check if score or not
+    - Reset score, reset clicked items
+    - Increase score, keep track of already clicked items
+  - Randomize grid => Wait for input
