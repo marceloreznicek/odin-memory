@@ -1,12 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 export default App;
 
 const gameUtils = {
-  createGameArray: () => {
-    const gameArray = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "Z", "X", "Y", "W"];
-    return gameArray;
-  },
 
   createRandomizedState: (gameArray) => {
     const copyArray = [...gameArray];
@@ -42,37 +38,128 @@ const gameUtils = {
     resultGrid.push(rowGrid);
     return resultGrid;
   },
-
-
 };
 
-function fakeClick(letter) {
-  // Check if this is a score or reset
-  // If this is a score: Add one to score counter, add the clicked item to the "already clicked element" reshuffle
-  // If this is
-}
+const externalSources = {
+  getRandomPokemon: async () => {
+    const apiURL = `https://pokeapi.co/api/v2/pokemon/${randomInt(1, 300)}/`;
+    const response = await fetch(apiURL);
+    const jsonResponse = await response.json();
+
+    return {
+      id: jsonResponse.id,
+      sprite: jsonResponse.sprites.front_default,
+    };
+  },
+
+  getPokemonList: (n) => {
+    const pokemonList = [];
+    for (let i = 1; i <= n; i++) {
+      pokemonList.push(externalSources.getRandomPokemon());
+    }
+
+    return pokemonList;
+  },
+};
 
 function App() {
+  console.log("rendering");
 
   const [clickedItems, setclickedItems] = useState([]);
   const [score, setScore] = useState(0);
   const [highscore, setHighscore] = useState(0);
-  const [tileNumber, setTileNumber] = useState(5);
+  const [tileNumber, setTileNumber] = useState(5);  
+  const [totalTiles, setTotalTiles] = useState(5);
+  const [totalTilesSubmited, setTotalTilesSubmited] = useState(5);
+  const [isLoading, setIsLoading] = useState(false);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
-  const [gameArray, setGameArray] = useState(gameUtils.createGameArray());
-  const [randGameArray, setRandGameArray] = useState(
-    gameUtils.createRandomizedState(gameArray)
-  );
-  const [currentGrid, setCurrentGrid] = useState(
-    gameUtils.createGrid(randGameArray, tileNumber)
-  );
+  const [gameArray, setGameArray] = useState([]);
+  const [pokemonList, setPokemonList] = useState([]);
+  const [randGameArray, setRandGameArray] = useState([]);
+  const [currentGrid, setCurrentGrid] = useState([]);
 
+  console.log("States after render:", {
+    // Game progress states
+    clickedItems: clickedItems,
+    clickedItemsLength: clickedItems.length,
+    score: score,
+    highscore: highscore,
 
+    // Configuration states
+    tileNumber: tileNumber,
+    totalTiles: totalTiles,
+
+    // Loading state
+    isLoading: isLoading,
+
+    // Game data states
+    pokemonList: pokemonList,
+    pokemonListLength: pokemonList.length,
+    gameArray: gameArray,
+    gameArrayLength: gameArray.length,
+    randGameArray: randGameArray,
+    randGameArrayLength: randGameArray.length,
+    currentGrid: currentGrid,
+    currentGridLength: currentGrid.length,
+  });
+
+  // FUNCTIONS
+
+  function softResetGame() {
+    setScore(0);
+    setclickedItems([]);
+  }
 
   function resetGame() {
+
+
     setScore(0);
-    setclickedItems([]);  
+    setclickedItems([]);
+    setTotalTilesSubmited(totalTiles)
+    setTileNumber(Math.floor(Math.sqrt(totalTiles)))
   }
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    const fetchPokemon = async () => {
+      try {
+        const pokemonPromisses = externalSources.getPokemonList(totalTilesSubmited);
+        const result = await Promise.all(pokemonPromisses);
+
+        if (isMounted) {
+          setPokemonList(result);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Failed to get Pokes: ", error);
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    fetchPokemon();
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+  }, [totalTilesSubmited]);
+
+  //THIS WILL take the recent pokemon list and build the gameArray with it
+  useEffect(() => {
+    if (pokemonList.length > 0) {
+      const randomStateArray = gameUtils.createRandomizedState(pokemonList);
+      const gridArray = gameUtils.createGrid(randomStateArray, tileNumber);
+
+      setGameArray(pokemonList);
+      setRandGameArray(randomStateArray);
+      setCurrentGrid(gridArray);
+    }
+  }, [pokemonList]);
 
   function handleClick(letter) {
     if (!clickedItems.includes(letter)) {
@@ -80,50 +167,70 @@ function App() {
       setScore(score + 1);
       setclickedItems([...clickedItems, letter]);
 
-      if (score >= highscore) setHighscore(score+1);
-
+      if (score >= highscore) setHighscore(score + 1);
     } else {
       //reset
-      resetGame();
+      softResetGame();
     }
 
     setRandGameArray(gameUtils.createRandomizedState(gameArray));
     setCurrentGrid(gameUtils.createGrid(randGameArray, tileNumber));
   }
 
-  function buildGridElements(array) {
-    return array.map((row, rowIndex) => {
-      return (
-        <div className="grid-row" key={"row-" + rowIndex}>
-          {row.map((item, itemIndex) => {
-            return (
-              <div
-                className="grid-item"
-                key={rowIndex + "x" + itemIndex}
-                onClick={(e) => handleClick(e.target.textContent)}
-              >
-                {item}
-              </div>
-            );
-          })}
-        </div>
-      );
-    });
-  }
+
+  //BUILD GRID
+
+  //COMPONENTS
+  const GridItem = ({ pokemon, onClickFunction }) => (
+    <img
+      className="grid-item"
+      key={pokemon.id}
+      src={pokemon.sprite}
+      onClick={() => onClickFunction(pokemon.id)}
+      alt={`Pokemon ${pokemon.id}`}
+    />
+  );
+
+  const GridRow = ({ row, onClickFunction }) => (
+    <div className="grid-row">
+      {row.map((pokemon) => <GridItem pokemon={pokemon}  onClickFunction = {onClickFunction} />)}
+    </div>
+  );
+
+  const GridTotal = ({currentGridArray, onClickFunction}) => (
+
+
+    <div className="grid">
+      {currentGridArray.map((row) => <GridRow row={row}  onClickFunction = {onClickFunction} />)}
+    </div>
+    
+  )
 
   return (
     <>
-      <div id="scoreboard">
-        <div className="currentScore">Current Score: {score}</div>
-        <div className="highScore">Highest Score: {highscore}</div>
-      </div>
+      {isLoading ? (
+        <div className="loading-div">Loading</div>
+      ) : (
+        <>
+          <div id="scoreboard">
+            <div className="currentScore">Current Score: {score}</div>
+            <div className="highScore">Highest Score: {highscore}</div>
+          </div>
 
-      <div id="game-setup">
-        <input type = "text" id="tile-number" onChange={(e) => setTileNumber(e.target.value)} value = {tileNumber} />
-        <button className="btn-reset">Reset</button>
-      </div>
+          <div id="game-setup">
+            <input
+              type="text"
+              id="tile-number"
+              onChange={(e) => setTotalTiles(e.target.value)}
+              value={totalTiles}
+            />
+            <button className="btn-reset" onClick = {resetGame}> Reset</button>
+          </div>
 
-      <div className="grid">{buildGridElements(currentGrid)}</div>{" "}
+          <GridTotal currentGridArray={currentGrid} onClickFunction = {handleClick} />
+
+        </>
+      )}
     </>
   );
 }
@@ -134,3 +241,4 @@ function randomInt(min, max) {
   // min and max included
   return Math.floor(Math.random() * (max - min + 1) + min);
 }
+
